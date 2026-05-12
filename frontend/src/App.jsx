@@ -36,7 +36,8 @@ const initialComposerState = {
   subject: '',
   emailBody: '',
   csvFile: null,
-  csvFileName: ''
+  csvFileName: '',
+  attachments: []
 };
 
 const initialSendState = {
@@ -294,6 +295,9 @@ export default function App() {
     formData.append('subject', composer.subject);
     formData.append('emailBody', composer.emailBody);
     formData.append('csvFile', composer.csvFile);
+    composer.attachments.forEach((file) => {
+      formData.append('attachments', file);
+    });
 
     completionAnnouncedRef.current = false;
     setSendState({

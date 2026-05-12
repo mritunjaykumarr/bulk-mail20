@@ -30,6 +30,10 @@ const app = express();
 const upload = multer({
   dest: path.resolve(__dirname, '..', 'tmp')
 });
+const uploadFields = upload.fields([
+  { name: 'csvFile', maxCount: 1 },
+  { name: 'attachments', maxCount: 10 }
+]);
 
 let tokens = null;
 let userProfile = null;
@@ -125,18 +129,77 @@ function toBase64Url(value) {
     .replace(/=+$/g, '');
 }
 
-function buildRawEmail({ to, subject, html, fromName, fromEmail }) {
+function chunkBase64(value) {
+  const matches = String(value).match(/.{1,76}/g);
+  return matches ? matches.join('\r\n') : '';
+}
+
+function sanitizeFileName(name) {
+  const clean = sanitizeHeaderValue(name);
+  return clean ? clean.replace(/"/g, "'") : 'attachment';
+}
+
+async function loadAttachments(files) {
+  return Promise.all(
+    files.map(async (file) => {
+      const content = await fs.promises.readFile(file.path);
+      return {
+        filename: sanitizeFileName(file.originalname),
+        contentType: file.mimetype || 'application/octet-stream',
+        content: content.toString('base64')
+      };
+    })
+  );
+}
+
+function cleanupFiles(files) {
+  files.forEach((file) => {
+    if (file?.path) {
+      fs.unlink(file.path, () => {});
+    }
+  });
+}
+
+function buildRawEmail({ to, subject, html, fromName, fromEmail, attachments = [] }) {
   const fromHeader = formatFromHeader({ name: fromName, email: fromEmail });
   const headers = [
     fromHeader ? `From: ${fromHeader}` : null,
     `To: ${to}`,
     `Subject: ${encodeSubject(subject)}`,
-    'MIME-Version: 1.0',
-    'Content-Type: text/html; charset="UTF-8"'
+    'MIME-Version: 1.0'
   ].filter(Boolean);
 
-  const message = [...headers, '', html].join('\r\n');
+  if (!attachments.length) {
+    headers.push('Content-Type: text/html; charset="UTF-8"');
+    const message = [...headers, '', html].join('\r\n');
+    return toBase64Url(message);
+  }
 
+  const boundary = `bulk_mail_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  headers.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+
+  const parts = [
+    `--${boundary}`,
+    'Content-Type: text/html; charset="UTF-8"',
+    'Content-Transfer-Encoding: 7bit',
+    '',
+    html
+  ];
+
+  for (const attachment of attachments) {
+    parts.push(
+      `--${boundary}`,
+      `Content-Type: ${attachment.contentType}; name="${attachment.filename}"`,
+      'Content-Transfer-Encoding: base64',
+      `Content-Disposition: attachment; filename="${attachment.filename}"`,
+      '',
+      chunkBase64(attachment.content)
+    );
+  }
+
+  parts.push(`--${boundary}--`);
+
+  const message = [...headers, '', ...parts].join('\r\n');
   return toBase64Url(message);
 }
 
@@ -168,16 +231,16 @@ function readRecipientsFromCsv(filePath) {
   });
 }
 
-async function sendEmail({ gmail, to, subject, html, fromName, fromEmail }) {
+async function sendEmail({ gmail, to, subject, html, fromName, fromEmail, attachments }) {
   await gmail.users.messages.send({
     userId: 'me',
     requestBody: {
-      raw: buildRawEmail({ to, subject, html, fromName, fromEmail })
+      raw: buildRawEmail({ to, subject, html, fromName, fromEmail, attachments })
     }
   });
 }
 
-async function runBulkSend({ subject, emailBody, recipients, fromName, fromEmail }) {
+async function runBulkSend({ subject, emailBody, recipients, fromName, fromEmail, attachments }) {
   const auth = getAuthedClient();
 
   if (!auth) {
@@ -197,7 +260,8 @@ async function runBulkSend({ subject, emailBody, recipients, fromName, fromEmail
         subject,
         html: emailBody,
         fromName,
-        fromEmail
+        fromEmail,
+        attachments
       });
       sendStatus.sent += 1;
     } catch (error) {
@@ -306,7 +370,7 @@ app.post('/api/auth/logout', (_req, res) => {
   res.json({ message: 'Logged out' });
 });
 
-app.post('/api/send-emails', upload.single('csvFile'), async (req, res) => {
+app.post('/api/send-emails', uploadFields, async (req, res) => {
   if (!tokens) {
     return res.status(401).json({ message: 'Please sign in with Google first.' });
   }
@@ -326,13 +390,17 @@ app.post('/api/send-emails', upload.single('csvFile'), async (req, res) => {
     return res.status(400).json({ message: 'Email body is required.' });
   }
 
-  if (!req.file) {
+  const csvFile = req.files?.csvFile?.[0] || null;
+  const attachmentFiles = req.files?.attachments || [];
+
+  if (!csvFile) {
     return res.status(400).json({ message: 'CSV file is required.' });
   }
 
   try {
-    const recipients = await readRecipientsFromCsv(req.file.path);
-    fs.unlink(req.file.path, () => {});
+    const recipients = await readRecipientsFromCsv(csvFile.path);
+    const attachments = await loadAttachments(attachmentFiles);
+    cleanupFiles([csvFile, ...attachmentFiles]);
 
     if (recipients.length === 0) {
       return res.status(400).json({ message: 'No valid email addresses found in CSV.' });
@@ -349,7 +417,14 @@ app.post('/api/send-emails', upload.single('csvFile'), async (req, res) => {
     const senderName = SENDER_NAME || userProfile?.userName || '';
     const senderEmail = userProfile?.userEmail || '';
 
-    runBulkSend({ subject, emailBody, recipients, fromName: senderName, fromEmail: senderEmail }).catch((error) => {
+    runBulkSend({
+      subject,
+      emailBody,
+      recipients,
+      fromName: senderName,
+      fromEmail: senderEmail,
+      attachments
+    }).catch((error) => {
       console.error('Bulk send failed:', error.message);
       sendStatus.inProgress = false;
       sendStatus.message = 'Bulk send stopped because of a server error.';
@@ -357,9 +432,10 @@ app.post('/api/send-emails', upload.single('csvFile'), async (req, res) => {
 
     return res.json({ message: 'Email sending started' });
   } catch (error) {
-    if (req.file) {
-      fs.unlink(req.file.path, () => {});
-    }
+    cleanupFiles([
+      csvFile,
+      ...attachmentFiles
+    ].filter(Boolean));
 
     console.error('CSV parse failed:', error.message);
     return res.status(400).json({ message: 'Unable to parse CSV file.' });

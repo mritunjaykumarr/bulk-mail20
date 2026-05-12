@@ -5,6 +5,7 @@ import RichTextEditor from './RichTextEditor';
 export default function ComposerForm({ composer, onComposerChange, disabled }) {
   const [isDragging, setIsDragging] = useState(false);
   const dragCounter = useRef(0);
+  const attachments = composer.attachments || [];
 
   function setCsvFile(file) {
     onComposerChange({
@@ -16,6 +17,16 @@ export default function ComposerForm({ composer, onComposerChange, disabled }) {
   function handleCsvChange(event) {
     const file = event.target.files?.[0] || null;
     setCsvFile(file);
+  }
+
+  function handleAttachmentsChange(event) {
+    const files = Array.from(event.target.files || []);
+    onComposerChange({ attachments: files });
+  }
+
+  function removeAttachment(index) {
+    const next = attachments.filter((_, fileIndex) => fileIndex !== index);
+    onComposerChange({ attachments: next });
   }
 
   function handleDragEnter(event) {
@@ -114,6 +125,44 @@ export default function ComposerForm({ composer, onComposerChange, disabled }) {
           </div>
         </div>
         <p className="dropHint">Or drag and drop a CSV file here</p>
+      </div>
+
+      <div className="attachmentBlock">
+        <div className="uploadRow">
+          <label className={`uploadControl ${disabled ? 'disabled' : ''}`}>
+            <Upload size={18} aria-hidden="true" />
+            <span>Attach files</span>
+            <input
+              type="file"
+              multiple
+              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+              onChange={handleAttachmentsChange}
+              disabled={disabled}
+            />
+          </label>
+          <div className="fileIndicator">
+            <FileText size={18} aria-hidden="true" />
+            <span>{attachments.length ? `${attachments.length} attachment(s)` : 'No attachments'}</span>
+          </div>
+        </div>
+
+        {attachments.length > 0 && (
+          <div className="attachmentList" aria-label="Selected attachments">
+            {attachments.map((file, index) => (
+              <div className="attachmentItem" key={`${file.name}-${index}`}>
+                <span>{file.name}</span>
+                <button
+                  className="attachmentRemove"
+                  type="button"
+                  onClick={() => removeAttachment(index)}
+                  disabled={disabled}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

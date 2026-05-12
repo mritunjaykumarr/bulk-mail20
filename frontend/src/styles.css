@@ -664,6 +664,50 @@ p {
   font-size: 0.86rem;
 }
 
+.attachmentBlock {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.attachmentList {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface-strong);
+}
+
+.attachmentItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.attachmentItem span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachmentRemove {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: transparent;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.attachmentRemove:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .sendSection {
   display: flex;
 }
