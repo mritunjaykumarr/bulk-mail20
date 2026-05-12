@@ -15,6 +15,7 @@ import Footer from './components/Footer';
 import InfoSections from './components/InfoSections';
 import CurrencyConverter from './components/CurrencyConverter';
 import PrivacyPage from './components/PrivacyPage';
+import TermsPage from './components/TermsPage';
 import { apiFetch } from './lib/api';
 import { GA_MEASUREMENT_ID } from './lib/config';
 import { loginBackendWithFirebase } from './lib/authApi';
@@ -52,6 +53,10 @@ function getRouteFromLocation() {
   const path = window.location.pathname.replace(/\/+$/, '');
   if (path === '/privacy') {
     return 'privacy';
+  }
+
+  if (path === '/terms') {
+    return 'terms';
   }
 
   return window.location.hash === '#currency' ? 'currency' : 'home';
@@ -331,6 +336,8 @@ export default function App() {
           <CurrencyConverter onMessage={showMessage} />
         ) : route === 'privacy' ? (
           <PrivacyPage />
+        ) : route === 'terms' ? (
+          <TermsPage />
         ) : (
           <main className="pageShell">
             <IntroSection />

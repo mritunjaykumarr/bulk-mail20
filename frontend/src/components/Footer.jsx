@@ -1,5 +1,5 @@
 export default function Footer({ route }) {
-  const linkBase = route === 'privacy' ? '/' : '';
+  const linkBase = route === 'privacy' || route === 'terms' ? '/' : '';
 
   return (
     <footer className="footer">
@@ -7,7 +7,7 @@ export default function Footer({ route }) {
       <p>Copyright 2026 mail-sender. All rights reserved.</p>
       <nav aria-label="Footer navigation">
         <a href="/privacy">Privacy Policy</a>
-        <a href={`${linkBase}#terms`}>Terms</a>
+        <a href="/terms">Terms</a>
         <a href={`${linkBase}#contact`}>Contact</a>
       </nav>
     </footer>
