@@ -7,3 +7,4 @@ backend/tmp/*
 !backend/tmp/.gitkeep
 npm-debug.log*
 *.log
+mail.csv
