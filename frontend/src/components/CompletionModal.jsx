@@ -5,9 +5,18 @@ export default function CompletionModal({ modal, onClose }) {
     return null;
   }
 
+  const kind = String(modal.kind || 'message')
+    .toLowerCase()
+    .replace(/\s+/g, '-');
+
   return (
     <div className="modalBackdrop" role="presentation">
-      <section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <section
+        className={`modal modal--${kind}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
+      >
         <button className="iconButton modalClose" type="button" onClick={onClose} title="Close">
           <X size={18} aria-hidden="true" />
           <span className="srOnly">Close</span>

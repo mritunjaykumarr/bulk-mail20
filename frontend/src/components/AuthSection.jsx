@@ -3,7 +3,7 @@ import { LogIn, LogOut, UserRound } from 'lucide-react';
 export default function AuthSection({ authState, onLogin, onLogout, authLoading }) {
   if (!authState.isAuthenticated) {
     return (
-      <section className="panel authPanel" aria-label="Authentication">
+      <section className="panel authPanel" data-state="signed-out" aria-label="Authentication">
         <div>
           <span className="eyebrow">Step 1</span>
           <h2>Connect Gmail</h2>
@@ -20,7 +20,7 @@ export default function AuthSection({ authState, onLogin, onLogout, authLoading 
   const displayName = authState.userName || authState.userEmail || 'Google user';
 
   return (
-    <section className="panel authPanel signedIn" aria-label="Authenticated user">
+    <section className="panel authPanel signedIn" data-state="signed-in" aria-label="Authenticated user">
       <div className="userIdentity">
         {authState.userPicture ? (
           <img src={authState.userPicture} alt="" referrerPolicy="no-referrer" />
