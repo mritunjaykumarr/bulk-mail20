@@ -3,6 +3,7 @@ const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
+const session = require('express-session');
 const csvParser = require('csv-parser');
 const dotenv = require('dotenv');
 const { google } = require('googleapis');
@@ -22,11 +23,14 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5174';
 const FRONTEND_URLS = process.env.FRONTEND_URLS || '';
 const BACKEND_URL = process.env.BACKEND_URL || `http://localhost:${PORT}`;
 const SENDER_NAME = process.env.SENDER_NAME || '';
+const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-session-secret';
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || '';
 const FIREBASE_CLIENT_EMAIL = process.env.FIREBASE_CLIENT_EMAIL || '';
 const FIREBASE_PRIVATE_KEY = String(process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
 
 const app = express();
+app.set('trust proxy', 1);
 const upload = multer({
   dest: path.resolve(__dirname, '..', 'tmp')
 });
@@ -35,9 +39,7 @@ const uploadFields = upload.fields([
   { name: 'attachments', maxCount: 10 }
 ]);
 
-let tokens = null;
-let userProfile = null;
-let sendStatus = createIdleStatus('Ready.');
+const sendStatusBySession = new Map();
 
 function hasRealEnvValue(value, placeholderParts) {
   return Boolean(value) && !placeholderParts.some((part) => String(value).includes(part));
@@ -61,14 +63,14 @@ if (firebaseConfigured && admin.apps.length === 0) {
   console.warn('Firebase Admin is not configured. Add FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY.');
 }
 
-function getAuthedClient() {
-  if (!tokens) {
+function getAuthedClient(accessToken) {
+  if (!accessToken) {
     return null;
   }
 
   const client = new google.auth.OAuth2();
   client.setCredentials({
-    access_token: tokens.googleAccessToken
+    access_token: accessToken
   });
   return client;
 }
@@ -81,6 +83,32 @@ function createIdleStatus(message) {
     inProgress: false,
     message
   };
+}
+
+function getSessionAuth(req) {
+  return req.session?.auth || null;
+}
+
+function clearSessionAuth(req) {
+  if (req.session) {
+    delete req.session.auth;
+  }
+}
+
+function getSendStatus(sessionId) {
+  return sessionId ? sendStatusBySession.get(sessionId) : null;
+}
+
+function ensureSendStatus(sessionId) {
+  if (!sessionId) {
+    return createIdleStatus('Ready.');
+  }
+
+  if (!sendStatusBySession.has(sessionId)) {
+    sendStatusBySession.set(sessionId, createIdleStatus('Ready.'));
+  }
+
+  return sendStatusBySession.get(sessionId);
 }
 
 function delay(ms) {
@@ -240,18 +268,19 @@ async function sendEmail({ gmail, to, subject, html, fromName, fromEmail, attach
   });
 }
 
-async function runBulkSend({ subject, emailBody, recipients, fromName, fromEmail, attachments }) {
-  const auth = getAuthedClient();
+async function runBulkSend({ subject, emailBody, recipients, fromName, fromEmail, attachments, accessToken, status }) {
+  const auth = getAuthedClient(accessToken);
 
   if (!auth) {
-    sendStatus = createIdleStatus('Authentication expired. Please sign in again.');
+    status.inProgress = false;
+    status.message = 'Authentication expired. Please sign in again.';
     return;
   }
 
   const gmail = google.gmail({ version: 'v1', auth });
 
   for (const recipient of recipients) {
-    sendStatus.message = `Sending email to ${recipient}`;
+    status.message = `Sending email to ${recipient}`;
 
     try {
       await sendEmail({
@@ -263,19 +292,19 @@ async function runBulkSend({ subject, emailBody, recipients, fromName, fromEmail
         fromEmail,
         attachments
       });
-      sendStatus.sent += 1;
+      status.sent += 1;
     } catch (error) {
-      sendStatus.failed += 1;
+      status.failed += 1;
       console.error(`Failed to send to ${recipient}:`, error.message);
     }
 
-    if (sendStatus.sent + sendStatus.failed < sendStatus.total) {
+    if (status.sent + status.failed < status.total) {
       await delay(500);
     }
   }
 
-  sendStatus.inProgress = false;
-  sendStatus.message = `Completed. Sent: ${sendStatus.sent}. Failed: ${sendStatus.failed}.`;
+  status.inProgress = false;
+  status.message = `Completed. Sent: ${status.sent}. Failed: ${status.failed}.`;
 }
 
 const allowedOrigins = new Set(
@@ -292,6 +321,18 @@ const allowedOrigins = new Set(
         .filter(Boolean)
     )
 );
+
+app.use(session({
+  secret: SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure: IS_PRODUCTION,
+    sameSite: IS_PRODUCTION ? 'none' : 'lax',
+    maxAge: 1000 * 60 * 60 * 6
+  }
+}));
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -314,11 +355,12 @@ app.get('/health', (_req, res) => {
 });
 
 app.get('/api/auth/status', (_req, res) => {
+  const auth = getSessionAuth(_req);
   res.json({
-    isAuthenticated: Boolean(tokens),
-    userEmail: userProfile?.userEmail || '',
-    userName: userProfile?.userName || '',
-    userPicture: userProfile?.userPicture || ''
+    isAuthenticated: Boolean(auth),
+    userEmail: auth?.userProfile?.userEmail || '',
+    userName: auth?.userProfile?.userName || '',
+    userPicture: auth?.userProfile?.userPicture || ''
   });
 });
 
@@ -341,14 +383,16 @@ app.post('/api/auth/firebase-login', async (req, res) => {
   try {
     const decodedToken = await admin.auth().verifyIdToken(idToken);
 
-    tokens = {
-      googleAccessToken,
-      firebaseUid: decodedToken.uid
-    };
-    userProfile = {
+    const userProfile = {
       userEmail: decodedToken.email || '',
       userName: decodedToken.name || '',
       userPicture: decodedToken.picture || ''
+    };
+
+    req.session.auth = {
+      googleAccessToken,
+      firebaseUid: decodedToken.uid,
+      userProfile
     };
 
     return res.json({
@@ -364,16 +408,24 @@ app.post('/api/auth/firebase-login', async (req, res) => {
 });
 
 app.post('/api/auth/logout', (_req, res) => {
-  tokens = null;
-  userProfile = null;
-  sendStatus = createIdleStatus('Logged out.');
-  res.json({ message: 'Logged out' });
+  const sessionId = req.sessionID;
+  clearSessionAuth(req);
+  if (sessionId) {
+    sendStatusBySession.set(sessionId, createIdleStatus('Logged out.'));
+  }
+  req.session?.destroy(() => {
+    res.json({ message: 'Logged out' });
+  });
 });
 
 app.post('/api/send-emails', uploadFields, async (req, res) => {
-  if (!tokens) {
+  const auth = getSessionAuth(req);
+  if (!auth) {
     return res.status(401).json({ message: 'Please sign in with Google first.' });
   }
+
+  const sessionId = req.sessionID;
+  const sendStatus = ensureSendStatus(sessionId);
 
   if (sendStatus.inProgress) {
     return res.status(409).json({ message: 'A send operation is already in progress.' });
@@ -406,16 +458,14 @@ app.post('/api/send-emails', uploadFields, async (req, res) => {
       return res.status(400).json({ message: 'No valid email addresses found in CSV.' });
     }
 
-    sendStatus = {
-      total: recipients.length,
-      sent: 0,
-      failed: 0,
-      inProgress: true,
-      message: `Starting bulk send for ${recipients.length} recipient(s).`
-    };
+    sendStatus.total = recipients.length;
+    sendStatus.sent = 0;
+    sendStatus.failed = 0;
+    sendStatus.inProgress = true;
+    sendStatus.message = `Starting bulk send for ${recipients.length} recipient(s).`;
 
-    const senderName = SENDER_NAME || userProfile?.userName || '';
-    const senderEmail = userProfile?.userEmail || '';
+    const senderName = SENDER_NAME || auth.userProfile?.userName || '';
+    const senderEmail = auth.userProfile?.userEmail || '';
 
     runBulkSend({
       subject,
@@ -423,7 +473,9 @@ app.post('/api/send-emails', uploadFields, async (req, res) => {
       recipients,
       fromName: senderName,
       fromEmail: senderEmail,
-      attachments
+      attachments,
+      accessToken: auth.googleAccessToken,
+      status: sendStatus
     }).catch((error) => {
       console.error('Bulk send failed:', error.message);
       sendStatus.inProgress = false;
@@ -443,7 +495,9 @@ app.post('/api/send-emails', uploadFields, async (req, res) => {
 });
 
 app.get('/api/status', (_req, res) => {
-  res.json(sendStatus);
+  const sessionId = _req.sessionID;
+  const status = getSendStatus(sessionId) || createIdleStatus('Ready.');
+  res.json(status);
 });
 
 app.use((error, _req, res, _next) => {
