@@ -24,6 +24,7 @@ const FRONTEND_URLS = process.env.FRONTEND_URLS || '';
 const BACKEND_URL = process.env.BACKEND_URL || `http://localhost:${PORT}`;
 const SENDER_NAME = process.env.SENDER_NAME || '';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-session-secret';
+const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'mail_sender.sid';
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || '';
 const FIREBASE_CLIENT_EMAIL = process.env.FIREBASE_CLIENT_EMAIL || '';
@@ -322,16 +323,20 @@ const allowedOrigins = new Set(
     )
 );
 
+const sessionCookieOptions = {
+  httpOnly: true,
+  secure: IS_PRODUCTION,
+  sameSite: IS_PRODUCTION ? 'none' : 'lax',
+  maxAge: 1000 * 60 * 60 * 6,
+  path: '/'
+};
+
 app.use(session({
+  name: SESSION_COOKIE_NAME,
   secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
-  cookie: {
-    httpOnly: true,
-    secure: IS_PRODUCTION,
-    sameSite: IS_PRODUCTION ? 'none' : 'lax',
-    maxAge: 1000 * 60 * 60 * 6
-  }
+  cookie: sessionCookieOptions
 }));
 
 app.use(cors({
@@ -413,6 +418,7 @@ app.post('/api/auth/logout', (_req, res) => {
   if (sessionId) {
     sendStatusBySession.set(sessionId, createIdleStatus('Logged out.'));
   }
+  res.clearCookie(SESSION_COOKIE_NAME, sessionCookieOptions);
   req.session?.destroy(() => {
     res.json({ message: 'Logged out' });
   });
