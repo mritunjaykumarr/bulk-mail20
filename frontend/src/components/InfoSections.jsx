@@ -9,7 +9,7 @@ export default function InfoSections({ onMessage }) {
         <span className="eyebrow">About</span>
         <h2>Built for simple Gmail CSV sends</h2>
         <p>
-          Bulk Mail Sender connects to one Google account, reads valid email addresses from a
+          mail-sender connects to one Google account, reads valid email addresses from a
           CSV file, and sends the composed HTML message through Gmail one recipient at a time.
         </p>
       </section>

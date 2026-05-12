@@ -76,7 +76,7 @@ export default function CurrencyConverter({ onMessage }) {
   return (
     <main className="pageShell currencyPage">
       <section className="currencyHero">
-        <a className="backLink" href="#home">Back to mail sender</a>
+        <a className="backLink" href="#home">Back to mail-sender</a>
         <span className="eyebrow">Separate utility page</span>
         <h1>Currency Converter</h1>
         <p>Convert between configured currencies with ExchangeRate-API.</p>

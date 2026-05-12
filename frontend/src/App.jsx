@@ -14,6 +14,7 @@ import CompletionModal from './components/CompletionModal';
 import Footer from './components/Footer';
 import InfoSections from './components/InfoSections';
 import CurrencyConverter from './components/CurrencyConverter';
+import PrivacyPage from './components/PrivacyPage';
 import { apiFetch } from './lib/api';
 import { GA_MEASUREMENT_ID } from './lib/config';
 import { loginBackendWithFirebase } from './lib/authApi';
@@ -47,7 +48,12 @@ const initialSendState = {
   percentage: 0
 };
 
-function getRouteFromHash() {
+function getRouteFromLocation() {
+  const path = window.location.pathname.replace(/\/+$/, '');
+  if (path === '/privacy') {
+    return 'privacy';
+  }
+
   return window.location.hash === '#currency' ? 'currency' : 'home';
 }
 
@@ -79,7 +85,7 @@ function mapStatus(status) {
 }
 
 export default function App() {
-  const [route, setRoute] = useState(getRouteFromHash);
+  const [route, setRoute] = useState(getRouteFromLocation);
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
   const [authState, setAuthState] = useState(initialAuthState);
   const [authLoading, setAuthLoading] = useState(true);
@@ -159,7 +165,7 @@ export default function App() {
 
   useEffect(() => {
     function handleHashChange() {
-      setRoute(getRouteFromHash());
+      setRoute(getRouteFromLocation());
     }
 
     window.addEventListener('hashchange', handleHashChange);
@@ -323,6 +329,8 @@ export default function App() {
 
         {route === 'currency' ? (
           <CurrencyConverter onMessage={showMessage} />
+        ) : route === 'privacy' ? (
+          <PrivacyPage />
         ) : (
           <main className="pageShell">
             <IntroSection />
@@ -351,7 +359,7 @@ export default function App() {
           </main>
         )}
 
-        <Footer />
+        <Footer route={route} />
       </div>
       <CompletionModal modal={modal} onClose={() => setModal(null)} />
     </>

@@ -302,6 +302,37 @@ body[data-theme="dark"] .background {
   padding: 24px 0;
 }
 
+.policyPage {
+  display: grid;
+  gap: 18px;
+}
+
+.policyHeader {
+  display: grid;
+  gap: 8px;
+}
+
+.policyMeta {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.policyPanel h2 {
+  margin-bottom: 8px;
+}
+
+.policyList {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.policyList li {
+  margin-bottom: 8px;
+}
+
 .introSection {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);

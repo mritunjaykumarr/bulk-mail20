@@ -2,26 +2,28 @@ import { Mail, ShieldCheck } from 'lucide-react';
 
 export default function Header({ route }) {
   const isCurrency = route === 'currency';
+  const isPrivacy = route === 'privacy';
+  const linkBase = isPrivacy ? '/' : '';
 
   return (
     <header className="header">
-      <a className="brand" href="#home" aria-label="Bulk Mail Sender home">
+      <a className="brand" href={`${linkBase}#home`} aria-label="mail-sender home">
         <span className="brandMark">
           <Mail size={22} aria-hidden="true" />
         </span>
         <span>
-          <strong>Bulk Mail Sender</strong>
+          <strong>mail-sender</strong>
           <small>Gmail CSV campaigns</small>
         </span>
       </a>
 
       <nav className="nav" aria-label="Primary navigation">
-        <a href="#home" aria-current={!isCurrency ? 'page' : undefined}>Home</a>
-        <a href="#about">About</a>
-        <a href="#privacy">Privacy Policy</a>
-        <a href="#terms">Terms</a>
-        <a href="#contact">Contact</a>
-        <a href="#currency" aria-current={isCurrency ? 'page' : undefined}>Currency Converter</a>
+        <a href={`${linkBase}#home`} aria-current={!isCurrency && !isPrivacy ? 'page' : undefined}>Home</a>
+        <a href={`${linkBase}#about`}>About</a>
+        <a href="/privacy" aria-current={isPrivacy ? 'page' : undefined}>Privacy Policy</a>
+        <a href={`${linkBase}#terms`}>Terms</a>
+        <a href={`${linkBase}#contact`}>Contact</a>
+        <a href={`${linkBase}#currency`} aria-current={isCurrency ? 'page' : undefined}>Currency Converter</a>
       </nav>
 
       <div className="headerBadge">
