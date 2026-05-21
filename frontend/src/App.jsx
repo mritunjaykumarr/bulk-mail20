@@ -16,6 +16,7 @@ import InfoSections from './components/InfoSections';
 import CurrencyConverter from './components/CurrencyConverter';
 import PrivacyPage from './components/PrivacyPage';
 import TermsPage from './components/TermsPage';
+import WarmupSection from './components/WarmupSection';
 import { apiFetch } from './lib/api';
 import { GA_MEASUREMENT_ID } from './lib/config';
 import { loginBackendWithFirebase } from './lib/authApi';
@@ -58,6 +59,10 @@ function getRouteFromLocation() {
 
   if (path === '/terms') {
     return 'terms';
+  }
+
+  if (window.location.hash === '#warmup') {
+    return 'warmup';
   }
 
   return window.location.hash === '#currency' ? 'currency' : 'home';
@@ -338,6 +343,8 @@ export default function App() {
 
         {route === 'currency' ? (
           <CurrencyConverter onMessage={showMessage} />
+        ) : route === 'warmup' ? (
+          <WarmupSection onMessage={showMessage} />
         ) : route === 'privacy' ? (
           <PrivacyPage />
         ) : route === 'terms' ? (

@@ -8,6 +8,10 @@ const csvParser = require('csv-parser');
 const dotenv = require('dotenv');
 const { google } = require('googleapis');
 const admin = require('firebase-admin');
+const warmupRouter = require('../routes/warmup');
+const scheduler = require('../services/scheduler');
+
+scheduler.initScheduler();
 
 for (const envPath of [
   path.resolve(__dirname, '..', '.env'),
@@ -354,6 +358,7 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
+app.use('/api/warmup', warmupRouter);
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true });

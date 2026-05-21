@@ -1,6 +1,7 @@
 import { Mail, ShieldCheck } from 'lucide-react';
 
 export default function Header({ route }) {
+  const isWarmup = route === 'warmup';
   const isCurrency = route === 'currency';
   const isPrivacy = route === 'privacy';
   const isTerms = route === 'terms';
@@ -19,7 +20,8 @@ export default function Header({ route }) {
       </a>
 
       <nav className="nav" aria-label="Primary navigation">
-        <a href={`${linkBase}#home`} aria-current={!isCurrency && !isPrivacy && !isTerms ? 'page' : undefined}>Home</a>
+        <a href={`${linkBase}#home`} aria-current={!isCurrency && !isPrivacy && !isTerms && !isWarmup ? 'page' : undefined}>Home</a>
+        <a href={`${linkBase}#warmup`} aria-current={isWarmup ? 'page' : undefined}>Warmup 🔥</a>
         <a href={`${linkBase}#about`}>About</a>
         <a href="/privacy" aria-current={isPrivacy ? 'page' : undefined}>Privacy Policy</a>
         <a href="/terms" aria-current={isTerms ? 'page' : undefined}>Terms</a>
